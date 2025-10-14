@@ -269,14 +269,40 @@ class AgentOutputParser:
                             priority="High"
                         ))
         
-        # Extract the final call/decision
-        decision_match = re.search(r'The Final Call:\s*(.+?)(?=📋|The Integrated Reality:|🔍|\Z)', output, re.DOTALL)
-        decision = decision_match.group(1).strip() if decision_match else "UNKNOWN"
+        # Extract the final call/decision with new format
+        decision = "UNKNOWN"
+        justification = ""
+        
+        # Try new format first: **Decision:** PROCEED/PIVOT/ABORT
+        decision_match = re.search(r'\*\*Decision:\*\*\s*(PROCEED|PIVOT|ABORT)', output, re.IGNORECASE)
+        if decision_match:
+            decision = decision_match.group(1).upper()
+        
+        # Extract justification
+        justification_match = re.search(r'\*\*Justification:\*\*\s*(.+?)(?=\*\*|📋|\Z)', output, re.DOTALL)
+        if justification_match:
+            justification = justification_match.group(1).strip()
+        
+        # Fallback: try to find decision keywords in "The Final Call" section
+        if decision == "UNKNOWN":
+            final_call_match = re.search(r'The Final Call:.*?(?=📋|\Z)', output, re.DOTALL | re.IGNORECASE)
+            if final_call_match:
+                final_call_text = final_call_match.group(0)
+                if re.search(r'\bPROCEED\b', final_call_text, re.IGNORECASE):
+                    decision = "PROCEED"
+                elif re.search(r'\bPIVOT\b', final_call_text, re.IGNORECASE):
+                    decision = "PIVOT"
+                elif re.search(r'\bABORT\b', final_call_text, re.IGNORECASE):
+                    decision = "ABORT"
+                # Use first sentence as justification if not found
+                if not justification:
+                    sentences = re.split(r'[.!?]', final_call_text)
+                    justification = sentences[1].strip() if len(sentences) > 1 else ""
         
         return {
             "recommendations": recommendations,
             "decision": decision,
-            "justification": "",
+            "justification": justification,
             "agent": "Trevor",
             "type": "synthesis"
         }
@@ -341,52 +367,96 @@ class AgentOutputParser:
         Returns:
             Dictionary with structured data for all agents
         """
+        print("\n=== STARTING OUTPUT PARSING ===")
+        print(f"Total outputs to parse: {len(conversation_history)}")
+        
         all_threats = []
         all_recommendations = []
         parsed_data = {
             "threats": [],
             "recommendations": [],
             "decision": None,
+            "justification": "",
             "quality_scores": {},
             "summary": {}
         }
         
-        for output in conversation_history:
-            if "Shrek" in output:
-                shrek_data = AgentOutputParser.parse_shrek_output(output)
-                all_threats.extend(shrek_data.get("threats", []))
-                all_recommendations.extend(shrek_data.get("action_items", []))
+        for i, output in enumerate(conversation_history, 1):
+            print(f"\n--- Parsing output {i} ---")
+            output_preview = output[:200].replace('\n', ' ')
+            print(f"Preview: {output_preview}...")
             
-            elif "Sonic" in output:
-                sonic_data = AgentOutputParser.parse_sonic_output(output)
-                all_threats.extend(sonic_data.get("threats", []))
-                all_recommendations.extend(sonic_data.get("action_items", []))
-            
-            elif "Hulk" in output:
-                hulk_data = AgentOutputParser.parse_hulk_output(output)
-                all_threats.extend(hulk_data.get("threats", []))
-                all_recommendations.extend(hulk_data.get("action_items", []))
-            
-            elif "Trevor" in output:
-                trevor_data = AgentOutputParser.parse_trevor_output(output)
-                all_recommendations.extend(trevor_data["recommendations"])
-                parsed_data["decision"] = trevor_data["decision"]
-                parsed_data["justification"] = trevor_data.get("justification", "")
-            
-            elif "Evaluator" in output:
-                eval_data = AgentOutputParser.parse_evaluator_output(output)
-                parsed_data["quality_scores"] = eval_data.get("scores", {})
+            try:
+                # Use more robust agent identification
+                if "🎯 Shrek" in output or "SHREK'S OPPORTUNITY MAP" in output:
+                    print("  → Identified as SHREK output")
+                    shrek_data = AgentOutputParser.parse_shrek_output(output)
+                    threats_found = len(shrek_data.get("threats", []))
+                    actions_found = len(shrek_data.get("action_items", []))
+                    print(f"  → Extracted: {threats_found} opportunities, {actions_found} actions")
+                    all_threats.extend(shrek_data.get("threats", []))
+                    all_recommendations.extend(shrek_data.get("action_items", []))
+
+                elif "🎯 Sonic" in output or "SONIC'S LEAN EXECUTION AUDIT" in output:
+                    print("  → Identified as SONIC output")
+                    sonic_data = AgentOutputParser.parse_sonic_output(output)
+                    threats_found = len(sonic_data.get("threats", []))
+                    actions_found = len(sonic_data.get("action_items", []))
+                    print(f"  → Extracted: {threats_found} speed issues, {actions_found} actions")
+                    all_threats.extend(sonic_data.get("threats", []))
+                    all_recommendations.extend(sonic_data.get("action_items", []))
+
+                elif "🎯 Hulk" in output or "HULK SMASH ASSUMPTIONS" in output:
+                    print("  → Identified as HULK output")
+                    hulk_data = AgentOutputParser.parse_hulk_output(output)
+                    threats_found = len(hulk_data.get("threats", []))
+                    actions_found = len(hulk_data.get("action_items", []))
+                    print(f"  → Extracted: {threats_found} assumption flaws, {actions_found} actions")
+                    all_threats.extend(hulk_data.get("threats", []))
+                    all_recommendations.extend(hulk_data.get("action_items", []))
+
+                elif "🎯 Trevor" in output or "TREVOR'S STRATEGIC SYNTHESIS" in output:
+                    print("  → Identified as TREVOR output")
+                    trevor_data = AgentOutputParser.parse_trevor_output(output)
+                    recs_found = len(trevor_data.get("recommendations", []))
+                    decision = trevor_data.get("decision", "UNKNOWN")
+                    print(f"  → Extracted: {recs_found} recommendations, decision: {decision}")
+                    all_recommendations.extend(trevor_data.get("recommendations", []))
+                    if trevor_data.get("decision") and trevor_data["decision"] != "UNKNOWN":
+                        parsed_data["decision"] = trevor_data["decision"]
+                        parsed_data["justification"] = trevor_data.get("justification", "")
+
+                elif "🎯 Evaluator" in output or "EVALUATOR'S QUALITY ASSESSMENT" in output:
+                    print("  → Identified as EVALUATOR output")
+                    eval_data = AgentOutputParser.parse_evaluator_output(output)
+                    scores_found = len(eval_data.get("scores", {}))
+                    print(f"  → Extracted: {scores_found} agent quality scores")
+                    parsed_data["quality_scores"] = eval_data.get("scores", {})
+                else:
+                    print("  → WARNING: Could not identify agent type")
+                    
+            except Exception as e:
+                print(f"  → ERROR parsing output: {e}")
+                import traceback
+                traceback.print_exc()
         
         parsed_data["threats"] = all_threats
         parsed_data["recommendations"] = all_recommendations
+        
+        print(f"\n=== PARSING COMPLETE ===")
+        print(f"Total threats: {len(all_threats)}")
+        print(f"Total recommendations: {len(all_recommendations)}")
+        print(f"Decision: {parsed_data.get('decision', 'None')}")
+        print(f"Quality scores: {len(parsed_data.get('quality_scores', {}))}")
+        print("===========================\n")
         
         # Calculate summary statistics
         if all_threats:
             severity_counts = {}
             for threat in all_threats:
-                severity = threat["severity"]
+                severity = threat.get("severity", "Unknown")
                 severity_counts[severity] = severity_counts.get(severity, 0) + 1
-            
+
             parsed_data["summary"] = {
                 "total_threats": len(all_threats),
                 "severity_breakdown": severity_counts,

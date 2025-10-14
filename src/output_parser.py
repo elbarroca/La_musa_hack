@@ -48,9 +48,9 @@ class AgentOutputParser:
         action_items = []
         
         # Extract Opportunities (new format)
-        major_opp_pattern = r'🟢\s*\*\*Major Opportunity \d+:\*\*\s*(.+?)(?=🟡|🔵|💡|\Z)'
-        hidden_adv_pattern = r'🟡\s*\*\*Hidden Advantage \d+:\*\*\s*(.+?)(?=🔵|💡|\Z)'
-        what_if_pattern = r'🔵\s*\*\*"What If" Possibility \d+:\*\*\s*(.+?)(?=💡|\Z)'
+        major_opp_pattern = r'🟢\s*Major Opportunity \d+:\s*(.+?)(?=🟡|🔵|💡|\Z)'
+        hidden_adv_pattern = r'🟡\s*Hidden Advantage \d+:\s*(.+?)(?=🔵|💡|\Z)'
+        what_if_pattern = r'🔵\s*"What If" Possibility \d+:\s*(.+?)(?=💡|\Z)'
         
         for pattern, priority in [(major_opp_pattern, "High"), (hidden_adv_pattern, "Medium"), (what_if_pattern, "Low")]:
             matches = re.finditer(pattern, output, re.DOTALL | re.IGNORECASE)
@@ -58,7 +58,7 @@ class AgentOutputParser:
                 opp_text = match.group(1).strip()
                 
                 # Extract evidence from the opportunity text
-                evidence_match = re.search(r'📄\s*\*\*Evidence from (.+?):\*\*\s*["\'](.+?)["\']', opp_text, re.DOTALL)
+                evidence_match = re.search(r'📄\s*Evidence from (.+?):\s*["\'](.+?)["\']', opp_text, re.DOTALL)
                 evidence = evidence_match.group(2) if evidence_match else "N/A"
                 source = evidence_match.group(1) if evidence_match else "N/A"
                 
@@ -71,16 +71,32 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*\*\*ACTION ITEMS\*\*.*?\n\s*(\d+)\.\s*(.+?)(?=\n\s*\d+\.|📋|🎯|\Z)'
-        action_matches = re.finditer(action_pattern, output, re.DOTALL | re.IGNORECASE)
-        
-        for match in action_matches:
-            action_items.append(ParsedRecommendation(
-                title=f"Opportunity Action {match.group(1)}",
-                description=match.group(2).strip(),
-                agent="Shrek",
-                priority="High"
-            ))
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
+        action_items_text = action_match.group(1) if action_match else ""
+
+        # Extract individual action items by their prefixes
+        action_prefixes = [
+            r'First move:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Strategic play:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Long-term vision:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Quick win:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Lean improvement:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Long-term shift:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Truth-based fix:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Assumption killer:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
+            r'Reality alignment:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)'
+        ]
+
+        for i, prefix_pattern in enumerate(action_prefixes):
+            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
+            for match in matches:
+                action_items.append(ParsedRecommendation(
+                    title=f"Opportunity Action {i+1}",
+                    description=match.strip(),
+                    agent="Shrek",
+                    priority="High"
+                ))
         
         return {
             "threats": opportunities,  # Storing as threats for compatibility
@@ -98,9 +114,9 @@ class AgentOutputParser:
         action_items = []
         
         # Extract speed killers (new format)
-        bloat_pattern = r'🔴\s*\*\*Major Bloat \d+:\*\*\s*(.+?)(?=🟠|🟡|⚡|\Z)'
-        waste_pattern = r'🟠\s*\*\*Waste Alert \d+:\*\*\s*(.+?)(?=🟡|⚡|\Z)'
-        overthinking_pattern = r'🟡\s*\*\*Overthinking Zone \d+:\*\*\s*(.+?)(?=⚡|\Z)'
+        bloat_pattern = r'🔴\s*Major Bloat \d+:\s*(.+?)(?=🟠|🟡|⚡|\Z)'
+        waste_pattern = r'🟠\s*Waste Alert \d+:\s*(.+?)(?=🟡|⚡|\Z)'
+        overthinking_pattern = r'🟡\s*Overthinking Zone \d+:\s*(.+?)(?=⚡|\Z)'
         
         for pattern, severity in [(bloat_pattern, "Critical"), (waste_pattern, "High"), (overthinking_pattern, "Medium")]:
             matches = re.finditer(pattern, output, re.DOTALL | re.IGNORECASE)
@@ -108,7 +124,7 @@ class AgentOutputParser:
                 threat_text = match.group(1).strip()
                 
                 # Extract evidence
-                evidence_match = re.search(r'📄\s*\*\*Evidence from (.+?):\*\*\s*["\'](.+?)["\']', threat_text, re.DOTALL)
+                evidence_match = re.search(r'📄\s*Evidence from (.+?):\s*["\'](.+?)["\']', threat_text, re.DOTALL)
                 evidence = evidence_match.group(2) if evidence_match else "N/A"
                 source = evidence_match.group(1) if evidence_match else "N/A"
                 
@@ -121,16 +137,26 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*\*\*ACTION ITEMS\*\*.*?\n\s*(\d+)\.\s*(.+?)(?=\n\s*\d+\.|📋|🎯|\Z)'
-        action_matches = re.finditer(action_pattern, output, re.DOTALL | re.IGNORECASE)
-        
-        for match in action_matches:
-            action_items.append(ParsedRecommendation(
-                title=f"Speed Action {match.group(1)}",
-                description=match.group(2).strip(),
-                agent="Sonic",
-                priority="High"
-            ))
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
+        action_items_text = action_match.group(1) if action_match else ""
+
+        # Extract individual action items by their prefixes (Sonic uses Quick win, Lean improvement, Long-term shift)
+        sonic_prefixes = [
+            r'Quick win:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)',
+            r'Lean improvement:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)',
+            r'Long-term shift:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)'
+        ]
+
+        for i, prefix_pattern in enumerate(sonic_prefixes):
+            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
+            for match in matches:
+                action_items.append(ParsedRecommendation(
+                    title=f"Speed Action {i+1}",
+                    description=match.strip(),
+                    agent="Sonic",
+                    priority="High"
+                ))
         
         return {
             "threats": speed_killers,
@@ -148,9 +174,9 @@ class AgentOutputParser:
         action_items = []
         
         # Extract user reality flaws (new format)
-        assumption_pattern = r'🔴\s*\*\*Fatal Assumption \d+:\*\*\s*(.+?)(?=🟠|🟡|💪|\Z)'
-        gap_pattern = r'🟠\s*\*\*Reality Gap \d+:\*\*\s*(.+?)(?=🟡|💪|\Z)'
-        wishful_pattern = r'🟡\s*\*\*Wishful Thinking \d+:\*\*\s*(.+?)(?=💪|\Z)'
+        assumption_pattern = r'🔴\s*Fatal Assumption \d+:\s*(.+?)(?=🟠|🟡|💪|\Z)'
+        gap_pattern = r'🟠\s*Reality Gap \d+:\s*(.+?)(?=🟡|💪|\Z)'
+        wishful_pattern = r'🟡\s*Wishful Thinking \d+:\s*(.+?)(?=💪|\Z)'
         
         for pattern, severity in [(assumption_pattern, "Critical"), (gap_pattern, "High"), (wishful_pattern, "Medium")]:
             matches = re.finditer(pattern, output, re.DOTALL | re.IGNORECASE)
@@ -158,7 +184,7 @@ class AgentOutputParser:
                 threat_text = match.group(1).strip()
                 
                 # Extract evidence
-                evidence_match = re.search(r'📄\s*\*\*Evidence from (.+?):\*\*\s*["\'](.+?)["\']', threat_text, re.DOTALL)
+                evidence_match = re.search(r'📄\s*Evidence from (.+?):\s*["\'](.+?)["\']', threat_text, re.DOTALL)
                 evidence = evidence_match.group(2) if evidence_match else "N/A"
                 source = evidence_match.group(1) if evidence_match else "N/A"
                 
@@ -171,16 +197,26 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*\*\*ACTION ITEMS\*\*.*?\n\s*(\d+)\.\s*(.+?)(?=\n\s*\d+\.|📋|🎯|\Z)'
-        action_matches = re.finditer(action_pattern, output, re.DOTALL | re.IGNORECASE)
-        
-        for match in action_matches:
-            action_items.append(ParsedRecommendation(
-                title=f"User Reality Action {match.group(1)}",
-                description=match.group(2).strip(),
-                agent="Hulk",
-                priority="High"
-            ))
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
+        action_items_text = action_match.group(1) if action_match else ""
+
+        # Extract individual action items by their prefixes (Hulk uses Truth-based fix, Assumption killer, Reality alignment)
+        hulk_prefixes = [
+            r'Truth-based fix:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)',
+            r'Assumption killer:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)',
+            r'Reality alignment:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)'
+        ]
+
+        for i, prefix_pattern in enumerate(hulk_prefixes):
+            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
+            for match in matches:
+                action_items.append(ParsedRecommendation(
+                    title=f"User Reality Action {i+1}",
+                    description=match.strip(),
+                    agent="Hulk",
+                    priority="High"
+                ))
         
         return {
             "threats": user_flaws,
@@ -197,48 +233,41 @@ class AgentOutputParser:
         """
         recommendations = []
         
-        # Extract consolidated action items by category
-        # Opportunity Capture (Shrek's Domain)
-        opp_pattern = r'🌟\s*Opportunity Capture.*?\n((?:\d+\.\s*.+?\n?)+)'
-        opp_match = re.search(opp_pattern, output, re.DOTALL | re.IGNORECASE)
-        if opp_match:
-            action_items = re.findall(r'(\d+)\.\s*(.+?)(?=\n\d+\.|\Z)', opp_match.group(1), re.DOTALL)
-            for num, action in action_items:
+        # Extract all consolidated action items
+        # Find all numbered items in the CONSOLIDATED ACTION PLAN section
+        action_plan_pattern = r'📋\s*CONSOLIDATED ACTION PLAN\s*(.*?)(?=The Integrated Reality:|🔍|\Z)'
+        action_plan_match = re.search(action_plan_pattern, output, re.DOTALL | re.IGNORECASE)
+
+        if action_plan_match:
+            action_plan_text = action_plan_match.group(1)
+
+            # Extract all numbered items from the action plan
+            all_actions = re.findall(r'(\d+)\.\s*(.+?)(?=\n\s*\d+\.|🌟|⚡|💪|\Z)', action_plan_text, re.DOTALL)
+
+            current_domain = "General"
+            for num, action in all_actions:
+                # Determine which domain this action belongs to based on context
+                if "Opportunity Capture" in action or current_domain == "Opportunity":
+                    current_domain = "Opportunity"
+                    title_prefix = "Opportunity Action"
+                elif "Speed & Execution" in action or current_domain == "Speed":
+                    current_domain = "Speed"
+                    title_prefix = "Speed Action"
+                elif "User Reality Alignment" in action or current_domain == "User":
+                    current_domain = "User"
+                    title_prefix = "User Reality Action"
+                else:
+                    title_prefix = "Action"
+
                 recommendations.append(ParsedRecommendation(
-                    title=f"Opportunity Action {num}",
-                    description=action.strip(),
-                    agent="Trevor",
-                    priority="High"
-                ))
-        
-        # Speed & Execution (Sonic's Domain)
-        speed_pattern = r'⚡\s*Speed & Execution.*?\n((?:\d+\.\s*.+?\n?)+)'
-        speed_match = re.search(speed_pattern, output, re.DOTALL | re.IGNORECASE)
-        if speed_match:
-            action_items = re.findall(r'(\d+)\.\s*(.+?)(?=\n\d+\.|\Z)', speed_match.group(1), re.DOTALL)
-            for num, action in action_items:
-                recommendations.append(ParsedRecommendation(
-                    title=f"Speed Action {num}",
-                    description=action.strip(),
-                    agent="Trevor",
-                    priority="High"
-                ))
-        
-        # User Reality Alignment (Hulk's Domain)
-        user_pattern = r'💪\s*User Reality Alignment.*?\n((?:\d+\.\s*.+?\n?)+)'
-        user_match = re.search(user_pattern, output, re.DOTALL | re.IGNORECASE)
-        if user_match:
-            action_items = re.findall(r'(\d+)\.\s*(.+?)(?=\n\d+\.|\Z)', user_match.group(1), re.DOTALL)
-            for num, action in action_items:
-                recommendations.append(ParsedRecommendation(
-                    title=f"User Reality Action {num}",
+                    title=f"{title_prefix} {num}",
                     description=action.strip(),
                     agent="Trevor",
                     priority="High"
                 ))
         
         # Extract the final call/decision
-        decision_match = re.search(r'The Final Call:\s*(.+?)(?=📋|The Integrated Reality:|\Z)', output, re.DOTALL)
+        decision_match = re.search(r'The Final Call:\s*(.+?)(?=📋|The Integrated Reality:|🔍|\Z)', output, re.DOTALL)
         decision = decision_match.group(1).strip() if decision_match else "UNKNOWN"
         
         return {
@@ -258,7 +287,7 @@ class AgentOutputParser:
         scores = {}
         
         # Extract agent scores
-        score_pattern = r'\*\*(\w+):\*\*.*?Clarity:\s*(\d+(?:\.\d+)?)/10.*?Evidence:\s*(\d+(?:\.\d+)?)/10.*?Actionability:\s*(\d+(?:\.\d+)?)/10'
+        score_pattern = r'(\w+)\'s Analysis:.*?Clarity:\s*(\d+(?:\.\d+)?)/10.*?Evidence:\s*(\d+(?:\.\d+)?)/10.*?Actionability:\s*(\d+(?:\.\d+)?)/10'
         matches = re.finditer(score_pattern, output, re.DOTALL | re.IGNORECASE)
         
         for match in matches:
@@ -395,7 +424,7 @@ class AgentOutputParser:
             validation["has_header"] = bool(re.search(header_patterns[agent_name], output, re.IGNORECASE))
         
         # Check for evidence citations (new format requirement)
-        validation["has_evidence"] = bool(re.search(r'📄\s*\*\*Evidence from', output, re.IGNORECASE))
+        validation["has_evidence"] = bool(re.search(r'📄\s*Evidence from', output, re.IGNORECASE))
         
         # Check format compliance based on agent (updated for new roles)
         if agent_name == "Shrek":

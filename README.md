@@ -176,7 +176,7 @@ The app will open in your browser at `http://localhost:8501`
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Your OpenAI API key | Required |
 | `OPENAI_MODEL` | Model to use | `gpt-4o-mini` |
-|  | Sampling temperature |  |
+| `OPENAI_TEMPERATURE` | Sampling temperature | `0.5` |
 | `CHROMA_PERSIST_DIRECTORY` | Vector DB storage path | `./data/chroma_db` |
 
 ### Agent Configuration

@@ -9,7 +9,7 @@ langchain-community==0.3.11
 langchain-core==0.3.28
 
 # LangGraph for Multi-Agent Orchestration
-langgraph==0.2.56
+langgraph>=0.2.0
 
 # Vector Store
 chromadb==0.4.24

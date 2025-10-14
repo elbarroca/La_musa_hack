@@ -378,26 +378,28 @@ class Orchestrator:
                 while attempts < max_retries and not quality_acceptable:
                     attempts += 1
                     
-                    # Header
+                    # Build complete output for this agent
                     header = f"\n{'='*60}\n🎯 {agent.name} (Attempt {attempts}/{max_retries})\n{'='*60}\n"
-                    yield (agent.name, header)
-
-                    # Show RAG context with preview
+                    
+                    # Show RAG context
                     query = f"{agent.name} analysis: {initial_task}"
                     rag_docs = self.knowledge_base.retrieve(query=query, top_k=5)
                     
-                    rag_info = f"\n📚 **Retrieved {len(rag_docs)} knowledge chunks:**\n\n"
-                    yield (agent.name, rag_info)
+                    rag_info = f"📚 **Retrieved {len(rag_docs)} knowledge chunks:**\n\n"
                     
                     # Show snippet of each chunk
+                    rag_snippets = ""
                     for i, doc in enumerate(rag_docs[:3], 1):  # Show top 3
-                        # Extract meaningful snippet (first 200 chars)
                         snippet = doc.split('\n')[0] if '\n' in doc else doc
                         snippet = snippet[:200] + "..." if len(snippet) > 200 else snippet
-                        chunk_preview = f"   {i}. {snippet}\n\n"
-                        yield (agent.name, chunk_preview)
+                        rag_snippets += f"   {i}. {snippet}\n\n"
+                    
+                    # Yield the header and RAG info as setup
+                    yield (agent.name, header)
+                    yield (agent.name, rag_info)
+                    yield (agent.name, rag_snippets)
 
-                    # Stream agent output
+                    # Stream agent output and collect it
                     full_response = ""
                     for chunk in agent.execute_streaming(
                         task=initial_task,
@@ -431,8 +433,25 @@ class Orchestrator:
 
                     yield (agent.name, eval_msg)
 
+                    # Store ONLY the agent output (without headers) for parsing
                     if quality_acceptable:
-                        conversation_history.append(full_response + "\n\n---\n\n")
+                        # Clean response - remove RAG preview and evaluation markers
+                        clean_response = full_response
+                        # Remove "Using LangChain tools" message if present
+                        if "[Using LangChain tools" in clean_response:
+                            parts = clean_response.split("[Using LangChain tools")
+                            if len(parts) > 1:
+                                # Keep everything after the message
+                                clean_response = parts[1].split("...]", 1)[1] if "...]" in parts[1] else parts[1]
+                        
+                        # Remove evaluation markers
+                        if "🔍 Evaluation:" in clean_response:
+                            clean_response = clean_response.split("🔍 Evaluation:")[0]
+                        
+                        clean_response = clean_response.strip()
+                        print(f"\n[ORCHESTRATOR] Storing {agent.name} output for parsing ({len(clean_response)} chars)")
+                        print(f"[ORCHESTRATOR] Preview: {clean_response[:150]}...")
+                        conversation_history.append(clean_response + "\n\n---\n\n")
 
             # Final evaluation
             if self.evaluator:
@@ -446,7 +465,17 @@ class Orchestrator:
                     yield ("Evaluator", chunk)
                     full_eval += chunk
 
-                conversation_history.append(full_eval)
+                # Clean evaluator output too
+                clean_eval = full_eval.strip()
+                if "[Using LangChain tools" in clean_eval:
+                    parts = clean_eval.split("[Using LangChain tools")
+                    if len(parts) > 1:
+                        clean_eval = parts[1].split("...]", 1)[1] if "...]" in parts[1] else parts[1]
+                
+                clean_eval = clean_eval.strip()
+                print(f"\n[ORCHESTRATOR] Storing Evaluator output for parsing ({len(clean_eval)} chars)")
+                print(f"[ORCHESTRATOR] Preview: {clean_eval[:150]}...")
+                conversation_history.append(clean_eval)
 
             print(f"\n{'='*80}")
             print("✅ SYMPHONY ANALYSIS COMPLETE")

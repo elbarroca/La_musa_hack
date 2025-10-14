@@ -70,30 +70,27 @@ class AgentOutputParser:
                     agent="Shrek"
                 ))
         
-        # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
+        # Extract ACTION ITEMS - more flexible pattern
+        action_pattern = r'📋\s*ACTION ITEMS[^:]*:(.*?)(?:>|$)'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
+        
+        # If still no match, try broader pattern
+        if not action_items_text:
+            action_pattern_alt = r'ACTION ITEMS.*?\n(.*?)(?:\n\n>|\Z)'
+            action_match_alt = re.search(action_pattern_alt, output, re.DOTALL | re.IGNORECASE)
+            action_items_text = action_match_alt.group(1) if action_match_alt else ""
 
-        # Extract individual action items by their prefixes
-        action_prefixes = [
-            r'First move:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Strategic play:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Long-term vision:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Quick win:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Lean improvement:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Long-term shift:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Truth-based fix:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Assumption killer:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)',
-            r'Reality alignment:\s*(.+?)(?=Strategic play:|Long-term vision:|Quick win:|Lean improvement:|Long-term shift:|Truth-based fix:|Assumption killer:|Reality alignment:|$)'
-        ]
-
-        for i, prefix_pattern in enumerate(action_prefixes):
-            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
-            for match in matches:
+        # Extract numbered action items (1. 2. 3.)
+        numbered_items = re.findall(r'\d+\.\s*(.+?)(?=\d+\.|$)', action_items_text, re.DOTALL)
+        
+        for i, item_text in enumerate(numbered_items):
+            # Clean up the text
+            cleaned = item_text.strip()
+            if cleaned:
                 action_items.append(ParsedRecommendation(
                     title=f"Opportunity Action {i+1}",
-                    description=match.strip(),
+                    description=cleaned,
                     agent="Shrek",
                     priority="High"
                 ))
@@ -136,24 +133,27 @@ class AgentOutputParser:
                     agent="Sonic"
                 ))
         
-        # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
+        # Extract ACTION ITEMS - more flexible pattern
+        action_pattern = r'📋\s*ACTION ITEMS[^:]*:(.*?)(?:>|$)'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
+        
+        # If still no match, try broader pattern
+        if not action_items_text:
+            action_pattern_alt = r'ACTION ITEMS.*?\n(.*?)(?:\n\n>|\Z)'
+            action_match_alt = re.search(action_pattern_alt, output, re.DOTALL | re.IGNORECASE)
+            action_items_text = action_match_alt.group(1) if action_match_alt else ""
 
-        # Extract individual action items by their prefixes (Sonic uses Quick win, Lean improvement, Long-term shift)
-        sonic_prefixes = [
-            r'Quick win:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)',
-            r'Lean improvement:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)',
-            r'Long-term shift:\s*(.+?)(?=Lean improvement:|Long-term shift:|$)'
-        ]
-
-        for i, prefix_pattern in enumerate(sonic_prefixes):
-            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
-            for match in matches:
+        # Extract numbered action items (1. 2. 3.)
+        numbered_items = re.findall(r'\d+\.\s*(.+?)(?=\d+\.|$)', action_items_text, re.DOTALL)
+        
+        for i, item_text in enumerate(numbered_items):
+            # Clean up the text
+            cleaned = item_text.strip()
+            if cleaned:
                 action_items.append(ParsedRecommendation(
                     title=f"Speed Action {i+1}",
-                    description=match.strip(),
+                    description=cleaned,
                     agent="Sonic",
                     priority="High"
                 ))
@@ -196,24 +196,27 @@ class AgentOutputParser:
                     agent="Hulk"
                 ))
         
-        # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
+        # Extract ACTION ITEMS - more flexible pattern
+        action_pattern = r'📋\s*ACTION ITEMS[^:]*:(.*?)(?:>|$)'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
+        
+        # If still no match, try broader pattern
+        if not action_items_text:
+            action_pattern_alt = r'ACTION ITEMS.*?\n(.*?)(?:\n\n>|\Z)'
+            action_match_alt = re.search(action_pattern_alt, output, re.DOTALL | re.IGNORECASE)
+            action_items_text = action_match_alt.group(1) if action_match_alt else ""
 
-        # Extract individual action items by their prefixes (Hulk uses Truth-based fix, Assumption killer, Reality alignment)
-        hulk_prefixes = [
-            r'Truth-based fix:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)',
-            r'Assumption killer:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)',
-            r'Reality alignment:\s*(.+?)(?=Assumption killer:|Reality alignment:|$)'
-        ]
-
-        for i, prefix_pattern in enumerate(hulk_prefixes):
-            matches = re.findall(prefix_pattern, action_items_text, re.DOTALL | re.IGNORECASE)
-            for match in matches:
+        # Extract numbered action items (1. 2. 3.)
+        numbered_items = re.findall(r'\d+\.\s*(.+?)(?=\d+\.|$)', action_items_text, re.DOTALL)
+        
+        for i, item_text in enumerate(numbered_items):
+            # Clean up the text
+            cleaned = item_text.strip()
+            if cleaned:
                 action_items.append(ParsedRecommendation(
                     title=f"User Reality Action {i+1}",
-                    description=match.strip(),
+                    description=cleaned,
                     agent="Hulk",
                     priority="High"
                 ))
@@ -269,35 +272,45 @@ class AgentOutputParser:
                             priority="High"
                         ))
         
-        # Extract the final call/decision with new format
-        decision = "UNKNOWN"
+        # Extract the final call/decision - multiple patterns
+        decision = None
         justification = ""
         
-        # Try new format first: **Decision:** PROCEED/PIVOT/ABORT
+        # Pattern 1: **Decision:** PROCEED/PIVOT/ABORT
         decision_match = re.search(r'\*\*Decision:\*\*\s*(PROCEED|PIVOT|ABORT)', output, re.IGNORECASE)
         if decision_match:
             decision = decision_match.group(1).upper()
         
-        # Extract justification
-        justification_match = re.search(r'\*\*Justification:\*\*\s*(.+?)(?=\*\*|📋|\Z)', output, re.DOTALL)
-        if justification_match:
-            justification = justification_match.group(1).strip()
-        
-        # Fallback: try to find decision keywords in "The Final Call" section
-        if decision == "UNKNOWN":
-            final_call_match = re.search(r'The Final Call:.*?(?=📋|\Z)', output, re.DOTALL | re.IGNORECASE)
+        # Pattern 2: Look for decision in "The Final Call" section
+        if not decision:
+            final_call_match = re.search(r'The Final Call:.*?(?=📋|The Complete|$)', output, re.DOTALL | re.IGNORECASE)
             if final_call_match:
                 final_call_text = final_call_match.group(0)
-                if re.search(r'\bPROCEED\b', final_call_text, re.IGNORECASE):
+                if re.search(r'\b(PROCEED|GO AHEAD|MOVE FORWARD)\b', final_call_text, re.IGNORECASE):
                     decision = "PROCEED"
-                elif re.search(r'\bPIVOT\b', final_call_text, re.IGNORECASE):
+                elif re.search(r'\b(PIVOT|ADJUST|MODIFY)\b', final_call_text, re.IGNORECASE):
                     decision = "PIVOT"
-                elif re.search(r'\bABORT\b', final_call_text, re.IGNORECASE):
+                elif re.search(r'\b(ABORT|STOP|HALT)\b', final_call_text, re.IGNORECASE):
                     decision = "ABORT"
-                # Use first sentence as justification if not found
-                if not justification:
-                    sentences = re.split(r'[.!?]', final_call_text)
-                    justification = sentences[1].strip() if len(sentences) > 1 else ""
+        
+        # Pattern 3: Scan entire output for decision keywords
+        if not decision:
+            if re.search(r'(Decision|Recommendation|Final Call).*?(PROCEED|GO)', output, re.DOTALL | re.IGNORECASE):
+                decision = "PROCEED"
+            elif re.search(r'(Decision|Recommendation|Final Call).*?(PIVOT)', output, re.DOTALL | re.IGNORECASE):
+                decision = "PIVOT"
+            elif re.search(r'(Decision|Recommendation|Final Call).*?(ABORT)', output, re.DOTALL | re.IGNORECASE):
+                decision = "ABORT"
+        
+        # Extract justification
+        justification_match = re.search(r'\*\*Justification:\*\*\s*(.+?)(?=\*\*|📋|The Complete|\Z)', output, re.DOTALL)
+        if justification_match:
+            justification = justification_match.group(1).strip()
+        elif decision:
+            # Try to extract context around decision
+            decision_context = re.search(rf'{decision}[^.]*\.[^.]*\.', output, re.IGNORECASE)
+            if decision_context:
+                justification = decision_context.group(0).strip()
         
         return {
             "recommendations": recommendations,
@@ -388,41 +401,57 @@ class AgentOutputParser:
             
             try:
                 # Use more robust agent identification
-                if "🎯 Shrek" in output or "SHREK'S OPPORTUNITY MAP" in output:
+                if "🎯 Shrek" in output or "SHREK'S OPPORTUNITY MAP" in output or "Shrek" in output:
                     print("  → Identified as SHREK output")
                     shrek_data = AgentOutputParser.parse_shrek_output(output)
                     threats_found = len(shrek_data.get("threats", []))
                     actions_found = len(shrek_data.get("action_items", []))
                     print(f"  → Extracted: {threats_found} opportunities, {actions_found} actions")
+                    if threats_found > 0:
+                        print(f"     Sample opportunity: {shrek_data['threats'][0]['threat'][:80]}...")
+                    if actions_found > 0:
+                        print(f"     Sample action: {shrek_data['action_items'][0]['description'][:80]}...")
                     all_threats.extend(shrek_data.get("threats", []))
                     all_recommendations.extend(shrek_data.get("action_items", []))
 
-                elif "🎯 Sonic" in output or "SONIC'S LEAN EXECUTION AUDIT" in output:
+                elif "🎯 Sonic" in output or "SONIC'S LEAN EXECUTION AUDIT" in output or "Sonic" in output:
                     print("  → Identified as SONIC output")
                     sonic_data = AgentOutputParser.parse_sonic_output(output)
                     threats_found = len(sonic_data.get("threats", []))
                     actions_found = len(sonic_data.get("action_items", []))
                     print(f"  → Extracted: {threats_found} speed issues, {actions_found} actions")
+                    if threats_found > 0:
+                        print(f"     Sample issue: {sonic_data['threats'][0]['threat'][:80]}...")
+                    if actions_found > 0:
+                        print(f"     Sample action: {sonic_data['action_items'][0]['description'][:80]}...")
                     all_threats.extend(sonic_data.get("threats", []))
                     all_recommendations.extend(sonic_data.get("action_items", []))
 
-                elif "🎯 Hulk" in output or "HULK SMASH ASSUMPTIONS" in output:
+                elif "🎯 Hulk" in output or "HULK SMASH ASSUMPTIONS" in output or "Hulk" in output:
                     print("  → Identified as HULK output")
                     hulk_data = AgentOutputParser.parse_hulk_output(output)
                     threats_found = len(hulk_data.get("threats", []))
                     actions_found = len(hulk_data.get("action_items", []))
                     print(f"  → Extracted: {threats_found} assumption flaws, {actions_found} actions")
+                    if threats_found > 0:
+                        print(f"     Sample flaw: {hulk_data['threats'][0]['threat'][:80]}...")
+                    if actions_found > 0:
+                        print(f"     Sample action: {hulk_data['action_items'][0]['description'][:80]}...")
                     all_threats.extend(hulk_data.get("threats", []))
                     all_recommendations.extend(hulk_data.get("action_items", []))
 
-                elif "🎯 Trevor" in output or "TREVOR'S STRATEGIC SYNTHESIS" in output:
+                elif "🎯 Trevor" in output or "TREVOR'S STRATEGIC SYNTHESIS" in output or "Trevor" in output:
                     print("  → Identified as TREVOR output")
                     trevor_data = AgentOutputParser.parse_trevor_output(output)
                     recs_found = len(trevor_data.get("recommendations", []))
                     decision = trevor_data.get("decision", "UNKNOWN")
                     print(f"  → Extracted: {recs_found} recommendations, decision: {decision}")
+                    if recs_found > 0:
+                        print(f"     Sample recommendation: {trevor_data['recommendations'][0]['description'][:80]}...")
+                    if decision and decision != "UNKNOWN":
+                        print(f"     Decision justification: {trevor_data.get('justification', 'N/A')[:100]}...")
                     all_recommendations.extend(trevor_data.get("recommendations", []))
-                    if trevor_data.get("decision") and trevor_data["decision"] != "UNKNOWN":
+                    if trevor_data.get("decision"):
                         parsed_data["decision"] = trevor_data["decision"]
                         parsed_data["justification"] = trevor_data.get("justification", "")
 

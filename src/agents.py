@@ -7,7 +7,7 @@ from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 
 from src.knowledge_base import KnowledgeBase
 from src.llm_client import LLMClient
@@ -46,9 +46,12 @@ class SymphonyAgent:
     def _build_chain(self):
         """
         Build the LangChain LCEL chain for this agent.
+        Uses RunnableParallel for better debugging and intermediate value access.
+        Implements 2025 best practices for LCEL chains.
+
         Chain structure: context retrieval -> prompt formatting -> LLM -> output parsing
         """
-        # Create the prompt template
+        # Create the prompt template aligned with Master.md specifications
         template = """
 {persona_prompt}
 
@@ -58,24 +61,24 @@ class SymphonyAgent:
 ### ONGOING CONVERSATION ###
 {history}
 
-### YOUR CURRENT TASK ###
-Analyze the following user-submitted plan and provide your expert opinion based on your persona and the context provided.
+### USER INPUT / PLAN ###
+{task}
 
-PLAN: "{task}"
-
-Now provide your analysis following the output format specified in your role description above.
+Based on your role and the context provided, execute your task on the user input above.
+Provide your analysis following the output format specified in your role description.
 """
 
         self.prompt = ChatPromptTemplate.from_template(template)
 
-        # Build the LCEL chain
+        # Build the LCEL chain with RunnableParallel for better debugging
+        # This allows us to access intermediate values and improves traceability
         self.chain = (
-            {
-                "context": lambda x: self._retrieve_context(x["task"]),
-                "history": lambda x: x["history"],
-                "task": lambda x: x["task"],
-                "persona_prompt": lambda x: self.persona_prompt
-            }
+            RunnableParallel(
+                context=lambda x: self._retrieve_context(x["task"]),
+                history=lambda x: x["history"],
+                task=lambda x: x["task"],
+                persona_prompt=lambda x: self.persona_prompt
+            )
             | self.prompt
             | self.llm_client.get_llm()
             | StrOutputParser()

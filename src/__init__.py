@@ -8,7 +8,7 @@ __author__ = "Symphony Team"
 
 from src.orchestrator import Orchestrator
 from src.agents import SymphonyAgent
-from src.knowledge_base import KnowledgeBase, ChromaKnowledgeBase, MockKnowledgeBase
+from src.knowledge_base import KnowledgeBase, ChromaKnowledgeBase
 from src.llm_client import LLMClient
 
 __all__ = [
@@ -16,6 +16,5 @@ __all__ = [
     "SymphonyAgent",
     "KnowledgeBase",
     "ChromaKnowledgeBase",
-    "MockKnowledgeBase",
     "LLMClient"
 ]

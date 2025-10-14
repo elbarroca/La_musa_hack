@@ -42,12 +42,14 @@ class LLMClient:
         self.temperature = temperature if temperature is not None else float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
         self.max_tokens = max_tokens or 1500
 
-        # Initialize LangChain ChatOpenAI
+        # Initialize LangChain ChatOpenAI with correct parameter syntax
+        # Using 2025 LangChain best practices - 'api_key' parameter is correct
         self.llm = ChatOpenAI(
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            api_key=self.api_key
+            api_key=self.api_key,
+            streaming=True  # Enable streaming by default for better UX
         )
 
         print(f"INFO: LLMClient initialized with model={self.model}, temperature={self.temperature}")
@@ -120,6 +122,7 @@ class LLMClient:
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            api_key=self.api_key
+            api_key=self.api_key,
+            streaming=True
         )
         print(f"INFO: Model updated to {model}")

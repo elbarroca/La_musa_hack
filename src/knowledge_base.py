@@ -53,12 +53,14 @@ class ChromaKnowledgeBase(KnowledgeBase):
             api_key=os.getenv("OPENAI_API_KEY")
         )
 
-        # Text splitter for chunking documents
+        # Text splitter for semantic chunking with contextual awareness
+        # Using best practices from 2025: semantic chunking with appropriate overlap
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
             length_function=len,
-            separators=["\n\n", "\n", ". ", " ", ""]
+            separators=["\n\n", "\n", ". ", " ", ""],
+            add_start_index=True  # Track position in original document
         )
 
         # Initialize or load existing vector store
@@ -147,25 +149,39 @@ class ChromaKnowledgeBase(KnowledgeBase):
 
     def retrieve(self, query: str, top_k: int = 3) -> List[str]:
         """
-        Retrieve relevant document chunks for a query using semantic search.
+        Retrieve relevant document chunks using hybrid search (similarity + MMR).
+        Implements 2025 best practices for better retrieval quality.
 
         Args:
             query: The search query
             top_k: Number of top results to return
 
         Returns:
-            List of relevant document contents
+            List of relevant document contents with source metadata
         """
         try:
-            # Perform similarity search
-            results = self.vectorstore.similarity_search(query, k=top_k)
+            # Use MMR (Maximal Marginal Relevance) for diverse results
+            # This prevents retrieving too many similar chunks
+            results = self.vectorstore.max_marginal_relevance_search(
+                query,
+                k=top_k,
+                fetch_k=top_k * 3  # Fetch more candidates for diversity
+            )
 
-            # Format results with source information
+            if not results:
+                return ["No documents found in the knowledge base. Please upload documents first."]
+
+            # Format results with rich metadata
             formatted_results = []
-            for doc in results:
+            for i, doc in enumerate(results, 1):
                 source = doc.metadata.get('source', 'Unknown')
+                page = doc.metadata.get('page', 'N/A')
                 content = doc.page_content.strip()
-                formatted_results.append(f"[Source: {source}]\n{content}")
+
+                # Format with contextual header
+                formatted_results.append(
+                    f"[Document {i}: {source} (Page {page})]\n{content}"
+                )
 
             print(f"INFO: Retrieved {len(formatted_results)} chunks for query: '{query[:50]}...'")
             return formatted_results
@@ -200,41 +216,3 @@ class ChromaKnowledgeBase(KnowledgeBase):
             return 0
 
 
-class MockKnowledgeBase(KnowledgeBase):
-    """
-    Mock knowledge base for testing with pre-populated Azure/Microsoft data.
-    """
-
-    def __init__(self):
-        self.documents = {
-            "architect": "Azure Well-Architected Framework Review for 'Project Phoenix': The project failed to implement Azure Policy for cost management, leading to a 200% budget overrun in its AKS cluster. A lack of private endpoints also created a significant security vulnerability.",
-            "customer": "Dynamics 365 Customer Advisory Board Feedback (Q4): Users reported 'workflow fatigue' from tools that don't seamlessly integrate with their M365 identity. A feature requiring more than 3 clicks to see value had an 80% drop-off in adoption.",
-            "competitor": "CI Battle Card - AWS vs. Azure (Logistics Vertical): AWS is aggressively bundling Amazon Redshift and SageMaker for logistics customers. Their primary sales tactic is to offer deep discounts on data ingestion to lock customers into their ecosystem."
-        }
-
-    def retrieve(self, query: str, top_k: int = 3) -> List[str]:
-        """Retrieve mock documents based on query keywords."""
-        print(f"INFO: MockKnowledgeBase received query: '{query}'")
-        query = query.lower()
-        results = []
-
-        if "architect" in query or "risk" in query or "shrek" in query:
-            results.append(self.documents["architect"])
-        if "customer" in query or "pm" in query or "sonic" in query:
-            results.append(self.documents["customer"])
-        if "competitor" in query or "market" in query or "hulk" in query:
-            results.append(self.documents["competitor"])
-
-        if not results:
-            results.append("No specific documents found in the mock database for this query.")
-
-        return results[:top_k]
-
-    def add_documents(self, file_paths: List[str]) -> int:
-        """Mock implementation - does nothing."""
-        print("INFO: MockKnowledgeBase does not support adding documents")
-        return 0
-
-    def clear(self):
-        """Mock implementation - does nothing."""
-        print("INFO: MockKnowledgeBase does not support clearing")

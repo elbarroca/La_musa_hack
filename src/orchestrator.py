@@ -10,7 +10,7 @@ from operator import add
 from langgraph.graph import StateGraph, END
 
 from src.agents import SymphonyAgent
-from src.knowledge_base import KnowledgeBase, ChromaKnowledgeBase, MockKnowledgeBase
+from src.knowledge_base import KnowledgeBase, ChromaKnowledgeBase
 from src.llm_client import LLMClient
 
 
@@ -29,13 +29,14 @@ class Orchestrator:
     Implements proper state management and agent routing.
     """
 
-    def __init__(self, agent_config_path: str, use_mock_kb: bool = True):
+    def __init__(self, agent_config_path: str, use_mock_kb: bool = False):
         """
         Initialize the orchestrator with agents and knowledge base.
+        Mock mode removed - always uses real ChromaKnowledgeBase for production RAG.
 
         Args:
             agent_config_path: Path to the agents.yaml configuration file
-            use_mock_kb: If True, uses mock knowledge base; otherwise uses Chroma
+            use_mock_kb: Deprecated parameter - always uses ChromaKnowledgeBase
         """
         # Load agent configurations
         with open(agent_config_path, 'r') as f:
@@ -44,13 +45,9 @@ class Orchestrator:
         # Initialize LLM client
         self.llm_client = LLMClient()
 
-        # Initialize knowledge base
-        if use_mock_kb:
-            self.knowledge_base: KnowledgeBase = MockKnowledgeBase()
-            print("INFO: Using MockKnowledgeBase")
-        else:
-            self.knowledge_base = ChromaKnowledgeBase()
-            print("INFO: Using ChromaKnowledgeBase with RAG")
+        # Initialize knowledge base - always use real RAG
+        self.knowledge_base: KnowledgeBase = ChromaKnowledgeBase()
+        print("INFO: Using ChromaKnowledgeBase with production RAG")
 
         # Create agents
         self.agents = [
@@ -168,8 +165,8 @@ class Orchestrator:
 
     def run_analysis_streaming(self, initial_task: str):
         """
-        Run the analysis with streaming output.
-        Yields agent outputs as they're generated.
+        Run the analysis with streaming output using latest LangGraph patterns.
+        Implements 2025 best practices with proper state streaming.
 
         Args:
             initial_task: The user's strategic plan or business idea
@@ -185,15 +182,16 @@ class Orchestrator:
         print(f"{'='*80}\n")
 
         # Yield the initial plan
-        initial_entry = f"## Initial Plan for Analysis:\n\n> {initial_task}"
+        initial_entry = f"## 📋 Initial Plan for Analysis:\n\n> {initial_task}\n\n---\n"
         yield ("System", initial_entry)
 
         conversation_history = [initial_entry]
 
         try:
             # Execute agents sequentially with streaming
-            for agent in self.agents:
-                print(f"\nINFO: Streaming agent: {agent.name}")
+            # Following Master.md orchestration sequence: Shrek -> Sonic -> Hulk -> Trevor
+            for i, agent in enumerate(self.agents, 1):
+                print(f"\nINFO: [{i}/{len(self.agents)}] Streaming agent: {agent.name}")
 
                 full_response = ""
                 for chunk in agent.execute_streaming(
@@ -203,6 +201,8 @@ class Orchestrator:
                     yield (agent.name, chunk)
                     full_response += chunk
 
+                # Add separator between agents for better readability
+                full_response += "\n\n---\n\n"
                 conversation_history.append(full_response)
 
             print(f"\n{'='*80}")
@@ -210,8 +210,16 @@ class Orchestrator:
             print(f"{'='*80}\n")
 
         except Exception as e:
-            print(f"\n❌ ERROR: Symphony analysis failed: {e}")
-            yield ("Error", f"❌ **Error**: {str(e)}")
+            error_msg = str(e)
+            print(f"\n❌ ERROR: Symphony analysis failed: {error_msg}")
+
+            # Provide helpful error messages
+            if "API key" in error_msg or "authentication" in error_msg.lower():
+                yield ("Error", f"❌ **API Key Error**: Please check your OPENAI_API_KEY in .env file")
+            elif "rate limit" in error_msg.lower():
+                yield ("Error", f"❌ **Rate Limit**: OpenAI API rate limit exceeded. Please wait and try again.")
+            else:
+                yield ("Error", f"❌ **Error**: {error_msg}")
 
     def get_knowledge_base(self) -> KnowledgeBase:
         """

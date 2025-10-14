@@ -60,74 +60,62 @@ if 'uploaded_files_count' not in st.session_state:
 with st.sidebar:
     st.title("🗂️ Knowledge Base")
     st.markdown("Upload company documents to ground the analysis in your context.")
-
-    # Toggle between Mock and Real KB
-    use_mock = st.checkbox(
-        "Use Mock Knowledge Base (for demo)",
-        value=False,
-        help="Toggle on to use mock data for quick demos. Leave off for real RAG with document uploads."
-    )
-
     st.markdown("---")
 
-    # File Upload Section
-    if not use_mock:
-        st.subheader("📤 Upload Documents")
-        uploaded_files = st.file_uploader(
-            "Upload PDF, TXT, or DOCX files",
-            type=['pdf', 'txt', 'docx'],
-            accept_multiple_files=True,
-            help="Upload company documents, policies, or research to inform the analysis"
-        )
+    # File Upload Section - Always enabled (mock mode removed)
+    st.subheader("📤 Upload Documents")
+    uploaded_files = st.file_uploader(
+        "Upload PDF, TXT, or DOCX files",
+        type=['pdf', 'txt', 'docx'],
+        accept_multiple_files=True,
+        help="Upload company documents, policies, or research to inform the analysis"
+    )
 
-        if uploaded_files and st.button("🔄 Process Documents", type="primary"):
-            with st.spinner("Processing uploaded documents..."):
-                try:
-                    # Initialize orchestrator if needed
-                    if st.session_state.orchestrator is None:
-                        st.session_state.orchestrator = Orchestrator(
-                            agent_config_path="config/agents.yaml",
-                            use_mock_kb=False
-                        )
-
-                    # Save uploaded files temporarily
-                    temp_files = []
-                    for uploaded_file in uploaded_files:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp:
-                            tmp.write(uploaded_file.getvalue())
-                            temp_files.append(tmp.name)
-
-                    # Add to knowledge base
-                    chunks_added = st.session_state.orchestrator.add_documents_to_kb(temp_files)
-
-                    # Clean up temp files
-                    for tmp_file in temp_files:
-                        os.unlink(tmp_file)
-
-                    st.session_state.uploaded_files_count = len(uploaded_files)
-                    st.success(f"✅ Processed {len(uploaded_files)} documents ({chunks_added} chunks)")
-
-                except Exception as e:
-                    st.error(f"❌ Error processing documents: {e}")
-
-        # Show KB status
-        if st.session_state.orchestrator is not None:
-            kb = st.session_state.orchestrator.get_knowledge_base()
+    if uploaded_files and st.button("🔄 Process Documents", type="primary"):
+        with st.spinner("Processing uploaded documents..."):
             try:
-                doc_count = kb.get_document_count()
-                st.info(f"📊 Knowledge Base: {doc_count} chunks indexed")
-            except:
-                pass
+                # Initialize orchestrator if needed
+                if st.session_state.orchestrator is None:
+                    st.session_state.orchestrator = Orchestrator(
+                        agent_config_path="config/agents.yaml"
+                    )
 
-        # Clear KB button
-        if st.button("🗑️ Clear Knowledge Base"):
-            if st.session_state.orchestrator is not None:
-                st.session_state.orchestrator.clear_knowledge_base()
-                st.session_state.uploaded_files_count = 0
-                st.success("Knowledge base cleared")
-                st.rerun()
-    else:
-        st.info("Using pre-populated mock data for demonstration")
+                # Save uploaded files temporarily
+                temp_files = []
+                for uploaded_file in uploaded_files:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp:
+                        tmp.write(uploaded_file.getvalue())
+                        temp_files.append(tmp.name)
+
+                # Add to knowledge base
+                chunks_added = st.session_state.orchestrator.add_documents_to_kb(temp_files)
+
+                # Clean up temp files
+                for tmp_file in temp_files:
+                    os.unlink(tmp_file)
+
+                st.session_state.uploaded_files_count = len(uploaded_files)
+                st.success(f"✅ Processed {len(uploaded_files)} documents ({chunks_added} chunks)")
+
+            except Exception as e:
+                st.error(f"❌ Error processing documents: {e}")
+
+    # Show KB status
+    if st.session_state.orchestrator is not None:
+        kb = st.session_state.orchestrator.get_knowledge_base()
+        try:
+            doc_count = kb.get_document_count()
+            st.info(f"📊 Knowledge Base: {doc_count} chunks indexed")
+        except:
+            pass
+
+    # Clear KB button
+    if st.button("🗑️ Clear Knowledge Base"):
+        if st.session_state.orchestrator is not None:
+            st.session_state.orchestrator.clear_knowledge_base()
+            st.session_state.uploaded_files_count = 0
+            st.success("Knowledge base cleared")
+            st.rerun()
 
     st.markdown("---")
 
@@ -175,10 +163,9 @@ if analyze_button:
         try:
             # Initialize orchestrator
             if st.session_state.orchestrator is None:
-                with st.spinner("Initializing Symphony..."):
+                with st.spinner("Initializing Symphony with production RAG..."):
                     st.session_state.orchestrator = Orchestrator(
-                        agent_config_path="config/agents.yaml",
-                        use_mock_kb=use_mock
+                        agent_config_path="config/agents.yaml"
                     )
 
             st.session_state.analysis_complete = False
@@ -245,7 +232,7 @@ if analyze_button:
                 with col3:
                     st.metric(
                         label="📚 Knowledge Sources",
-                        value=f"{st.session_state.uploaded_files_count} docs" if not use_mock else "Mock Data"
+                        value=f"{st.session_state.uploaded_files_count} docs"
                     )
 
                 st.markdown("---")

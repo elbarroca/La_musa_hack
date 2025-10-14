@@ -71,7 +71,7 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
 
@@ -137,7 +137,7 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
 
@@ -197,7 +197,7 @@ class AgentOutputParser:
                 ))
         
         # Extract ACTION ITEMS
-        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍'
+        action_pattern = r'📋\s*ACTION ITEMS.*?\n(.*?)🔍 Evaluation:'
         action_match = re.search(action_pattern, output, re.DOTALL | re.IGNORECASE)
         action_items_text = action_match.group(1) if action_match else ""
 
@@ -234,37 +234,40 @@ class AgentOutputParser:
         recommendations = []
         
         # Extract all consolidated action items
-        # Find all numbered items in the CONSOLIDATED ACTION PLAN section
+        # Find all items in the CONSOLIDATED ACTION PLAN section
         action_plan_pattern = r'📋\s*CONSOLIDATED ACTION PLAN\s*(.*?)(?=The Integrated Reality:|🔍|\Z)'
         action_plan_match = re.search(action_plan_pattern, output, re.DOTALL | re.IGNORECASE)
 
         if action_plan_match:
             action_plan_text = action_plan_match.group(1)
 
-            # Extract all numbered items from the action plan
-            all_actions = re.findall(r'(\d+)\.\s*(.+?)(?=\n\s*\d+\.|🌟|⚡|💪|\Z)', action_plan_text, re.DOTALL)
+            # Extract all items from each domain section
+            domain_sections = [
+                (r'🌟\s*Opportunity Capture.*?\n(.*?)(?=⚡|\Z)', "Opportunity"),
+                (r'⚡\s*Speed & Execution.*?\n(.*?)(?=💪|\Z)', "Speed"),
+                (r'💪\s*User Reality Alignment.*?\n(.*?)(?=\Z)', "User")
+            ]
 
-            current_domain = "General"
-            for num, action in all_actions:
-                # Determine which domain this action belongs to based on context
-                if "Opportunity Capture" in action or current_domain == "Opportunity":
-                    current_domain = "Opportunity"
-                    title_prefix = "Opportunity Action"
-                elif "Speed & Execution" in action or current_domain == "Speed":
-                    current_domain = "Speed"
-                    title_prefix = "Speed Action"
-                elif "User Reality Alignment" in action or current_domain == "User":
-                    current_domain = "User"
-                    title_prefix = "User Reality Action"
-                else:
-                    title_prefix = "Action"
+            for section_pattern, domain in domain_sections:
+                section_match = re.search(section_pattern, action_plan_text, re.DOTALL | re.IGNORECASE)
+                if section_match:
+                    section_text = section_match.group(1)
+                    # Extract individual items (lines that start with a dash or contain " - Owner:")
+                    items = re.findall(r'(.+?)\s*-\s*Owner:', section_text)
 
-                recommendations.append(ParsedRecommendation(
-                    title=f"{title_prefix} {num}",
-                    description=action.strip(),
-                    agent="Trevor",
-                    priority="High"
-                ))
+                    for i, item in enumerate(items):
+                        title_prefix = {
+                            "Opportunity": "Opportunity Action",
+                            "Speed": "Speed Action",
+                            "User": "User Reality Action"
+                        }.get(domain, "Action")
+
+                        recommendations.append(ParsedRecommendation(
+                            title=f"{title_prefix} {i+1}",
+                            description=item.strip(),
+                            agent="Trevor",
+                            priority="High"
+                        ))
         
         # Extract the final call/decision
         decision_match = re.search(r'The Final Call:\s*(.+?)(?=📋|The Integrated Reality:|🔍|\Z)', output, re.DOTALL)

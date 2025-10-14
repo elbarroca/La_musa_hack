@@ -1,20 +1,42 @@
 # src/agents.py
 """
-Symphony Agent System - TRUE AGENTIC Implementation
-Agents REASON iteratively, DECIDE what tools to use, OBSERVE results, and THINK again
+Symphony Agent System - LangGraph + LangChain Implementation
+Agents use proper LangChain tool calling with LangGraph state management
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Annotated, TypedDict
+from operator import add
+
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+
 from src.llm_client import LLMClient
 from src.knowledge_base import KnowledgeBase
 from src.output_parser import AgentOutputParser
 import re
 import json
 
+
+# Define the agent state for LangGraph
+class AgentReasoningState(TypedDict):
+    """State for agent reasoning loop using LangGraph"""
+    messages: Annotated[List[Any], add]  # Message history
+    task: str  # The task to analyze
+    conversation_history: List[str]  # Context from other agents
+    agent_name: str  # Current agent name
+    iteration: int  # Current iteration
+    final_answer: Optional[str]  # Final structured answer
+
+
 class SymphonyAgent:
     """
-    A TRUE agentic Symphony analyst that iteratively THINKS, DECIDES, ACTS, and OBSERVES.
-    Uses iterative reasoning loop - not just a single LLM call.
+    A TRUE agentic Symphony analyst using LangChain tools + LangGraph orchestration.
+    Uses proper tool calling, reasoning, and state management.
     """
 
     def __init__(
@@ -26,7 +48,7 @@ class SymphonyAgent:
         max_iterations: int = 5
     ):
         """
-        Initialize the TRUE agentic Symphony Agent.
+        Initialize the LangChain-powered Symphony Agent.
 
         Args:
             agent_name: Name of the agent (e.g., "Shrek", "Sonic")
@@ -41,263 +63,325 @@ class SymphonyAgent:
         self.retriever = retriever
         self.max_iterations = max_iterations
         
-        # Tool registry - these are the actions the agent can take
-        self.tools = {
-            "search_knowledge": self._search_kb_tool,
-            "analyze_patterns": self._analyze_patterns_tool,
-            "evaluate_severity": self._evaluate_risk_tool,
-            "think_deeply": self._think_tool
-        }
+        # Create tools for this agent
+        self.tools = self._create_tools()
         
-        # Track reasoning process
-        self.reasoning_log = []
-
-    def _search_kb_tool(self, query: str) -> str:
-        """Tool: Search knowledge base for evidence"""
-        try:
-            docs = self.retriever.retrieve(query, top_k=5)
-            if not docs or (isinstance(docs, list) and len(docs) == 0):
-                return "No documents found. Use general expertise."
-            
-            if isinstance(docs, list) and len(docs) > 0 and "No documents" in str(docs[0]):
-                return "No documents found. Use general expertise."
-            
-            result = "📚 KNOWLEDGE FINDINGS:\n"
-            for i, doc in enumerate(docs[:3], 1):
-                doc_preview = str(doc)[:250]
-                result += f"{i}. {doc_preview}...\n"
-            return result
-        except Exception as e:
-            return f"KB unavailable. Using general expertise."
-
-    def _analyze_patterns_tool(self, text: str) -> str:
-        """Tool: Analyze patterns"""
-        patterns = []
-        if re.search(r'cost|expensive|budget', text, re.I):
-            patterns.append("💰 Financial risk")
-        if re.search(r'delay|slow|time', text, re.I):
-            patterns.append("⏱️ Timeline risk")
-        if re.search(r'complex|difficult', text, re.I):
-            patterns.append("🔧 Complexity risk")
-        if re.search(r'market|customer|user', text, re.I):
-            patterns.append("👥 Market risk")
+        # Create the agent with tool calling
+        self.agent = self._create_agent()
         
-        return "🔍 PATTERNS: " + ", ".join(patterns) if patterns else "No critical patterns detected."
+        # Build the reasoning graph
+        self.graph = self._build_reasoning_graph()
 
-    def _evaluate_risk_tool(self, description: str) -> str:
-        """Tool: Evaluate severity"""
-        desc_lower = description.lower()
+    def _create_tools(self):
+        """Create LangChain tools for the agent"""
         
-        if any(kw in desc_lower for kw in ['catastrophic', 'fatal', 'critical']):
-            return "🎯 SEVERITY: Critical (Immediate action required)"
-        elif any(kw in desc_lower for kw in ['major', 'significant', 'serious']):
-            return "🎯 SEVERITY: High (Address urgently)"
-        elif any(kw in desc_lower for kw in ['moderate', 'notable']):
-            return "🎯 SEVERITY: Medium (Monitor closely)"
-        return "🎯 SEVERITY: Low (Track)"
-
-    def _think_tool(self, thought: str) -> str:
-        """Tool: Deep thinking without external tools"""
-        return f"💭 REASONING: {thought}"
-
-    def _run_agent_loop(self, task: str, conversation_history: List[str]) -> str:
-        """
-        Run the TRUE agentic reasoning loop.
-        The agent iteratively thinks, decides actions, observes results.
-        """
-        print(f"\n{'='*70}")
-        print(f"🤖 [{self.name}] TRUE AGENTIC LOOP STARTING")
-        print(f"{'='*70}\n")
+        # Capture self in closures
+        retriever = self.retriever
+        agent_name = self.name
         
-        # Initialize agent state
-        history_str = "\n\n".join(conversation_history[-2:]) if conversation_history else "Start of conversation."
-        observations = []
-        iteration = 0
-        
-        # Agentic loop: Think → Decide → Act → Observe → Repeat
-        while iteration < self.max_iterations:
-            iteration += 1
-            print(f"[{self.name}] 🔄 Iteration {iteration}/{self.max_iterations}")
+        @tool
+        def search_knowledge(query: str) -> str:
+            """Search the knowledge base for relevant company documents and evidence.
             
-            # Build the reasoning prompt for this iteration
-            thinking_prompt = self._build_thinking_prompt(
-                task=task,
-                history=history_str,
-                observations=observations,
-                iteration=iteration
-            )
-            
-            # Agent THINKS and DECIDES what to do next
-            llm = self.llm_client.get_llm()
-            decision = llm.invoke(thinking_prompt)
-            decision_text = decision.content if hasattr(decision, 'content') else str(decision)
-            
-            print(f"[{self.name}] 💭 Decision: {decision_text[:150]}...")
-            
-            # Parse the decision
-            action = self._parse_action(decision_text)
-            
-            if action["type"] == "FINAL_ANSWER":
-                # Agent has decided it has enough information
-                print(f"[{self.name}] ✅ Agent reached conclusion after {iteration} iterations")
-                return action["content"]
-            
-            elif action["type"] == "USE_TOOL":
-                # Agent wants to use a tool
-                tool_name = action.get("tool")
-                tool_input = action.get("input", "")
+            Args:
+                query: The search query to find relevant information
                 
-                if tool_name in self.tools:
-                    print(f"[{self.name}] 🔧 Using tool: {tool_name}")
-                    observation = self.tools[tool_name](tool_input)
-                    observations.append({
-                        "iteration": iteration,
-                        "action": tool_name,
-                        "input": tool_input[:100],
-                        "result": observation[:200]
-                    })
-                    print(f"[{self.name}] 👁️ Observation: {observation[:100]}...")
-                else:
-                    observations.append({
-                        "iteration": iteration,
-                        "action": "ERROR",
-                        "result": f"Unknown tool: {tool_name}"
-                    })
+            Returns:
+                Relevant documents and evidence from the knowledge base
+            """
+            try:
+                docs = retriever.retrieve(query, top_k=5)
+                if not docs or (isinstance(docs, list) and len(docs) == 0):
+                    return "No documents found. Use general expertise."
+                
+                if isinstance(docs, list) and len(docs) > 0 and "No documents" in str(docs[0]):
+                    return "No documents found. Use general expertise."
+                
+                result = "📚 KNOWLEDGE FINDINGS:\n"
+                for i, doc in enumerate(docs[:3], 1):
+                    doc_preview = str(doc)[:250]
+                    result += f"{i}. {doc_preview}...\n"
+                return result
+            except Exception as e:
+                return f"KB unavailable. Using general expertise."
+
+        @tool
+        def analyze_patterns(text: str) -> str:
+            """Analyze text to identify risk patterns and concerns.
             
-            elif action["type"] == "THINK":
-                # Agent is thinking without tools
-                thought = action.get("content", "")
-                observations.append({
-                    "iteration": iteration,
-                    "action": "THINK",
-                    "result": thought[:200]
-                })
-                print(f"[{self.name}] 💭 Thinking: {thought[:100]}...")
-        
-        # Max iterations reached - generate final answer
-        print(f"[{self.name}] ⚠️ Max iterations reached, generating final answer...")
-        final_prompt = self._build_final_prompt(task, history_str, observations)
-        final_response = llm.invoke(final_prompt)
-        return final_response.content if hasattr(final_response, 'content') else str(final_response)
+            Args:
+                text: The text to analyze for patterns
+                
+            Returns:
+                Identified risk patterns
+            """
+            patterns = []
+            if re.search(r'cost|expensive|budget', text, re.I):
+                patterns.append("💰 Financial risk")
+            if re.search(r'delay|slow|time', text, re.I):
+                patterns.append("⏱️ Timeline risk")
+            if re.search(r'complex|difficult', text, re.I):
+                patterns.append("🔧 Complexity risk")
+            if re.search(r'market|customer|user', text, re.I):
+                patterns.append("👥 Market risk")
+            
+            return "🔍 PATTERNS: " + ", ".join(patterns) if patterns else "No critical patterns detected."
 
-    def _build_thinking_prompt(self, task: str, history: str, observations: List[Dict], iteration: int) -> str:
-        """Build the prompt for agent's thinking at each iteration"""
-        
-        obs_summary = "\n".join([
-            f"Iteration {obs['iteration']}: {obs['action']} → {obs['result'][:150]}"
-            for obs in observations[-3:]  # Last 3 observations
-        ]) if observations else "No observations yet."
-        
-        tools_desc = """
-Available Tools:
-- search_knowledge: Search company documents for evidence
-- analyze_patterns: Identify patterns and risks in text
-- evaluate_severity: Assess risk severity level
-- think_deeply: Reason through complex issues
-"""
-        
-        return f"""{self.persona_prompt}
+        @tool
+        def evaluate_severity(description: str) -> str:
+            """Evaluate the severity level of a risk or threat.
+            
+            Args:
+                description: Description of the risk or threat
+                
+            Returns:
+                Severity assessment
+            """
+            desc_lower = description.lower()
+            
+            if any(kw in desc_lower for kw in ['catastrophic', 'fatal', 'critical']):
+                return "🎯 SEVERITY: Critical (Immediate action required)"
+            elif any(kw in desc_lower for kw in ['major', 'significant', 'serious']):
+                return "🎯 SEVERITY: High (Address urgently)"
+            elif any(kw in desc_lower for kw in ['moderate', 'notable']):
+                return "🎯 SEVERITY: Medium (Monitor closely)"
+            return "🎯 SEVERITY: Low (Track)"
 
-=== AGENTIC REASONING LOOP (Iteration {iteration}/{self.max_iterations}) ===
+        @tool
+        def synthesize_analysis(findings: str) -> str:
+            """Synthesize findings into a structured analysis format.
+            
+            Args:
+                findings: The raw findings to synthesize
+                
+            Returns:
+                Guidance on structuring the analysis
+            """
+            return f"""
+🎯 Synthesis Guide for {agent_name}:
+1. Start with your role header (###)
+2. Present key findings with evidence
+3. Identify 2-3 specific threats with severity
+4. Provide actionable recommendations
+5. Support claims with data/patterns
 
-TASK TO ANALYZE:
-{task[:500]}
-
-CONVERSATION CONTEXT:
-{history[:1000]}
-
-OBSERVATIONS SO FAR:
-{obs_summary}
-
-{tools_desc}
-
-=== YOUR DECISION ===
-
-You are in iteration {iteration} of {self.max_iterations}. Analyze what you know and decide your next action.
-
-You can respond in ONE of these formats:
-
-1. If you need more information, use a tool:
-ACTION: USE_TOOL
-TOOL: [tool_name]
-INPUT: [what to analyze/search]
-REASONING: [why you need this]
-
-2. If you need to think through something:
-ACTION: THINK
-CONTENT: [your reasoning]
-
-3. If you have enough information to provide your final analysis:
-ACTION: FINAL_ANSWER
-CONTENT: [Your complete structured analysis following your persona format]
-
-What is your decision?
+Structure your response following your persona format exactly.
 """
 
-    def _build_final_prompt(self, task: str, history: str, observations: List[Dict]) -> str:
-        """Build prompt for final answer generation"""
+        return [search_knowledge, analyze_patterns, evaluate_severity, synthesize_analysis]
+
+    def _create_agent(self):
+        """Create a LangChain agent with tool calling"""
         
-        obs_summary = "\n".join([
-            f"{obs['action']}: {obs['result'][:200]}"
-            for obs in observations
+        llm = self.llm_client.get_llm()
+        
+        # Create a prompt that emphasizes the persona and structured output
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""{self.persona_prompt}
+
+CRITICAL INSTRUCTIONS:
+1. Use your tools (search_knowledge, analyze_patterns, evaluate_severity) to gather evidence
+2. After gathering evidence, use synthesize_analysis to get your output format guide
+3. Provide your FINAL ANSWER in the EXACT format specified in your persona
+
+Your output MUST include:
+- Your role header (e.g., "### 🌟 SHREK'S OPPORTUNITY MAP")
+- All required sections with emojis
+- Evidence citations with document names
+- Specific action items
+
+Do NOT provide generic responses. Follow your persona format EXACTLY."""),
+            MessagesPlaceholder(variable_name="chat_history", optional=True),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
         
-        return f"""{self.persona_prompt}
+        # Create the tool-calling agent
+        agent = create_tool_calling_agent(llm, self.tools, prompt)
+        
+        return agent
 
-=== FINAL ANALYSIS GENERATION ===
+    def _build_reasoning_graph(self):
+        """Build LangGraph workflow for agent reasoning"""
+        
+        # Create tool node
+        tool_node = ToolNode(self.tools)
+        
+        # Define the graph
+        workflow = StateGraph(AgentReasoningState)
+        
+        # Add nodes
+        workflow.add_node("agent", self._agent_node)
+        workflow.add_node("tools", tool_node)
+        
+        # Set entry point
+        workflow.add_edge(START, "agent")
+        
+        # Agent decides: use tool or finish
+        workflow.add_conditional_edges(
+            "agent",
+            self._should_continue,
+            {
+                "continue": "tools",
+                "end": END
+            }
+        )
+        
+        # After tools, go back to agent
+        workflow.add_edge("tools", "agent")
+        
+        return workflow.compile()
 
-TASK:
+    def _agent_node(self, state: AgentReasoningState) -> AgentReasoningState:
+        """Node that runs the agent"""
+        
+        # Build input for agent
+        messages = state.get("messages", [])
+        task = state.get("task", "")
+        history = state.get("conversation_history", [])
+        iteration = state.get("iteration", 0)
+        
+        # Create context
+        history_str = "\n\n".join(history[-2:]) if history else "Start of conversation."
+        
+        input_text = f"""
+TASK TO ANALYZE:
 {task}
 
-CONTEXT:
-{history[:1000]}
+CONVERSATION CONTEXT (from other agents):
+{history_str}
 
-YOUR REASONING PROCESS:
-{obs_summary}
+ITERATION: {iteration + 1}/{self.max_iterations}
 
-Now provide your COMPLETE structured analysis following the exact format specified in your persona.
-Include all required sections with proper emoji markers.
+Analyze this thoroughly. Use your tools to gather evidence, then provide your complete structured analysis following your persona format EXACTLY.
 """
-
-    def _parse_action(self, decision_text: str) -> Dict[str, Any]:
-        """Parse the agent's decision into structured action"""
         
-        # Check for FINAL_ANSWER
-        if re.search(r'ACTION:\s*FINAL_ANSWER', decision_text, re.IGNORECASE):
-            # Extract content after FINAL_ANSWER
-            content_match = re.search(r'CONTENT:(.*)', decision_text, re.DOTALL | re.IGNORECASE)
-            if content_match:
-                return {
-                    "type": "FINAL_ANSWER",
-                    "content": content_match.group(1).strip()
-                }
-            return {"type": "FINAL_ANSWER", "content": decision_text}
+        # If no messages yet, start fresh
+        if not messages:
+            messages = [HumanMessage(content=input_text)]
         
-        # Check for USE_TOOL
-        if re.search(r'ACTION:\s*USE_TOOL', decision_text, re.IGNORECASE):
-            tool_match = re.search(r'TOOL:\s*(\w+)', decision_text, re.IGNORECASE)
-            input_match = re.search(r'INPUT:\s*(.+?)(?=REASONING:|$)', decision_text, re.DOTALL | re.IGNORECASE)
+        # Run agent with executor
+        agent_executor = AgentExecutor(
+            agent=self.agent,
+            tools=self.tools,
+            verbose=True,
+            max_iterations=self.max_iterations,
+            return_intermediate_steps=True,
+            handle_parsing_errors=True,
+            early_stopping_method="generate"  # Ensure we get a final answer
+        )
+        
+        try:
+            result = agent_executor.invoke({
+                "input": input_text,
+                "chat_history": messages[:-1] if len(messages) > 1 else []
+            })
+            
+            output = result.get("output", "")
+            
+            # Add to messages
+            new_messages = [AIMessage(content=output)]
+            
+            # Check if this is a final answer
+            is_final = self._is_final_answer(output, iteration)
             
             return {
-                "type": "USE_TOOL",
-                "tool": tool_match.group(1) if tool_match else "think_deeply",
-                "input": input_match.group(1).strip() if input_match else decision_text[:200]
+                "messages": new_messages,
+                "task": task,
+                "conversation_history": history,
+                "agent_name": self.name,
+                "iteration": iteration + 1,
+                "final_answer": output if is_final else state.get("final_answer")
             }
-        
-        # Check for THINK
-        if re.search(r'ACTION:\s*THINK', decision_text, re.IGNORECASE):
-            content_match = re.search(r'CONTENT:\s*(.+)', decision_text, re.DOTALL | re.IGNORECASE)
+            
+        except Exception as e:
+            print(f"ERROR in agent node: {e}")
+            error_message = f"### 🎯 {self.name}\n\n❌ **Error during analysis**: {str(e)}"
             return {
-                "type": "THINK",
-                "content": content_match.group(1).strip() if content_match else decision_text
+                "messages": [AIMessage(content=error_message)],
+                "task": task,
+                "conversation_history": history,
+                "agent_name": self.name,
+                "iteration": iteration + 1,
+                "final_answer": error_message
             }
+
+    def _should_continue(self, state: AgentReasoningState) -> str:
+        """Decide whether to continue or end"""
         
-        # Default: treat as thinking
-        return {"type": "THINK", "content": decision_text}
+        messages = state.get("messages", [])
+        iteration = state.get("iteration", 0)
+        
+        if not messages:
+            return "continue"
+        
+        last_message = messages[-1]
+        
+        # Check if we have a final answer
+        if state.get("final_answer"):
+            return "end"
+        
+        # Check max iterations
+        if iteration >= self.max_iterations:
+            return "end"
+        
+        # Check if agent wants to use tools (has tool calls)
+        if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+            return "continue"
+        
+        # Check if response looks complete (has proper formatting)
+        if isinstance(last_message.content, str):
+            content = last_message.content
+            
+            # Check for agent-specific markers
+            format_markers = {
+                "Shrek": "SHREK'S OPPORTUNITY MAP",
+                "Sonic": "SONIC'S LEAN EXECUTION AUDIT",
+                "Hulk": "HULK SMASH ASSUMPTIONS",
+                "Trevor": "TREVOR'S STRATEGIC SYNTHESIS",
+                "Evaluator": "EVALUATOR'S QUALITY ASSESSMENT"
+            }
+            
+            agent_marker = format_markers.get(self.name)
+            if agent_marker and agent_marker in content:
+                # Has proper header - check for content
+                has_action_items = "ACTION ITEMS" in content
+                has_evidence = "📄" in content or "Evidence" in content
+                
+                if has_action_items and has_evidence:
+                    return "end"
+        
+        # Default: continue if under max iterations
+        return "continue" if iteration < self.max_iterations else "end"
+
+    def _is_final_answer(self, output: str, iteration: int) -> bool:
+        """Check if output is a final answer"""
+        
+        # Check for agent-specific formatting
+        format_markers = {
+            "Shrek": "SHREK'S OPPORTUNITY MAP",
+            "Sonic": "SONIC'S LEAN EXECUTION AUDIT",
+            "Hulk": "HULK SMASH ASSUMPTIONS",
+            "Trevor": "TREVOR'S STRATEGIC SYNTHESIS",
+            "Evaluator": "EVALUATOR'S QUALITY ASSESSMENT"
+        }
+        
+        agent_marker = format_markers.get(self.name)
+        has_proper_header = agent_marker and agent_marker in output
+        has_content = len(output) > 300
+        
+        # Check for required sections
+        has_action_items = "ACTION ITEMS" in output or "CONSOLIDATED ACTION PLAN" in output
+        has_evidence = "📄" in output or "Evidence from" in output
+        
+        # Consider it final if it has proper structure OR we're at max iterations
+        is_complete = has_proper_header and has_content and has_action_items
+        
+        return is_complete or iteration >= self.max_iterations - 1
 
     def execute(self, task: str, conversation_history: List[str]) -> str:
         """
-        Execute TRUE agentic analysis with iterative reasoning loop.
+        Execute agent analysis using LangChain + LangGraph.
         
         Args:
             task: The user's strategic plan/task
@@ -307,8 +391,34 @@ Include all required sections with proper emoji markers.
             The agent's structured analysis
         """
         try:
-            # Run the true agentic loop
-            response = self._run_agent_loop(task, conversation_history)
+            print(f"\n{'='*70}")
+            print(f"🤖 [{self.name}] Starting LangChain Agent with Tools")
+            print(f"{'='*70}\n")
+            
+            # Initialize state
+            initial_state: AgentReasoningState = {
+                "messages": [],
+                "task": task,
+                "conversation_history": conversation_history,
+                "agent_name": self.name,
+                "iteration": 0,
+                "final_answer": None
+            }
+            
+            # Run the graph
+            final_state = self.graph.invoke(initial_state)
+            
+            # Extract final answer
+            response = final_state.get("final_answer")
+            
+            if not response:
+                # Get from last message
+                messages = final_state.get("messages", [])
+                if messages:
+                    last_msg = messages[-1]
+                    response = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                else:
+                    response = f"### 🎯 {self.name}\n\n⚠️ No analysis generated"
             
             # Ensure proper formatting
             if not response.startswith("###"):
@@ -316,7 +426,7 @@ Include all required sections with proper emoji markers.
             
             # Validate
             validation = AgentOutputParser.validate_output_format(response, self.name)
-            print(f"INFO: [{self.name}] Analysis complete (validation: {validation['is_valid']})")
+            print(f"\n✅ [{self.name}] Analysis complete (validation: {validation['is_valid']})")
             
             return response
 
@@ -329,38 +439,55 @@ Include all required sections with proper emoji markers.
 
     def execute_streaming(self, task: str, conversation_history: List[str]):
         """
-        Execute TRUE agentic analysis with streaming.
-        Shows the agent's reasoning process in real-time.
+        Execute agent analysis with streaming.
+        
+        Note: Full streaming of LangGraph is complex, so we run the graph
+        and stream the final output.
         """
-        print(f"INFO: [{self.name}] Starting TRUE agentic analysis (streaming)...")
+        print(f"INFO: [{self.name}] Starting analysis with streaming...")
         
         try:
             # Yield header
             yield f"### 🎯 {self.name}\n\n"
-            yield f"*[Agentic reasoning loop initiated...]*\n\n"
+            yield f"*[Using LangChain tools for evidence gathering...]*\n\n"
             
-            # For streaming, we'll run the full loop and stream the final output
-            # (True streaming of the reasoning loop would be complex)
-            response = self._run_agent_loop(task, conversation_history)
+            # Run the full graph
+            initial_state: AgentReasoningState = {
+                "messages": [],
+                "task": task,
+                "conversation_history": conversation_history,
+                "agent_name": self.name,
+                "iteration": 0,
+                "final_answer": None
+            }
             
-            # Stream the response
-            llm = self.llm_client.get_llm()
-            full_text = ""
+            final_state = self.graph.invoke(initial_state)
             
-            for chunk in llm.stream(response):
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                full_text += content
-                yield content
+            # Extract response
+            response = final_state.get("final_answer")
+            if not response:
+                messages = final_state.get("messages", [])
+                if messages:
+                    last_msg = messages[-1]
+                    response = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                else:
+                    response = "⚠️ No analysis generated"
+            
+            # Stream the response in chunks
+            chunk_size = 50
+            for i in range(0, len(response), chunk_size):
+                chunk = response[i:i + chunk_size]
+                yield chunk
             
             # Validate
-            validation = AgentOutputParser.validate_output_format(full_text, self.name)
+            validation = AgentOutputParser.validate_output_format(response, self.name)
             print(f"INFO: [{self.name}] Streaming complete (validation: {validation['is_valid']})")
 
         except Exception as e:
             print(f"ERROR: [{self.name}] Streaming failed: {e}")
             import traceback
             traceback.print_exc()
-            yield f"❌ **Error**: {e}"
+            yield f"\n\n❌ **Error**: {e}"
     
     def validate_output(self, output: str) -> Dict[str, bool]:
         """Validate agent output format."""

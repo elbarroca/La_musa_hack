@@ -281,13 +281,41 @@ LA_Musa/
 
 ## 🚀 Deployment
 
-### Streamlit Cloud
-```bash
-# Push to GitHub, then deploy on streamlit.io
-# Add OPENAI_API_KEY in Streamlit Cloud secrets
-```
+### Streamlit Cloud (Browser Deployment)
 
-### Docker
+1. **Push to GitHub**
+   ```bash
+   git add .
+   git commit -m "Deploy to Streamlit Cloud"
+   git push origin main
+   ```
+
+2. **Deploy on [streamlit.io](https://share.streamlit.io)**
+   - Go to [share.streamlit.io](https://share.streamlit.io)
+   - Connect your GitHub repository
+   - Set main file path: `app.py`
+
+3. **Configure Environment Variables in Streamlit Cloud**
+   - In your Streamlit Cloud app settings, go to **Secrets**
+   - Add the following secrets:
+     ```toml
+     OPENAI_API_KEY = "sk-your-actual-openai-api-key"
+     OPENAI_MODEL = "gpt-4o-mini"
+     OPENAI_TEMPERATURE = "0.50"
+     CHROMA_PERSIST_DIRECTORY = "./data/chroma_db"
+     ```
+
+4. **Streamlit Configuration (streamlit_config.toml)**
+   - The `streamlit_config.toml` is already configured for browser deployment
+   - Key settings for browser environments:
+     - `server.headless = true` - Runs without GUI
+     - `server.address = "0.0.0.0"` - Binds to all interfaces
+     - `browser.gatherUsageStats = false` - Disables telemetry
+
+5. **Access your deployed app**
+   - Your app will be available at: `https://your-app-name.streamlit.app`
+
+### Docker Deployment
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
@@ -295,7 +323,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
 EXPOSE 8501
-CMD ["streamlit", "run", "app.py"]
+CMD ["streamlit", "run", "app.py", "--server.headless", "true"]
 ```
 
 ---

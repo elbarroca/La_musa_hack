@@ -3,7 +3,7 @@ Symphony Agent Module with LangChain LCEL Chains
 Each agent uses a RAG chain: retriever -> prompt -> LLM -> parser
 """
 
-from typing import List
+from typing import List, Dict
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 
 from src.knowledge_base import KnowledgeBase
 from src.llm_client import LLMClient
+from src.output_parser import AgentOutputParser
 
 
 class SymphonyAgent:
@@ -97,8 +98,8 @@ Provide your analysis following the output format specified in your role descrip
         # Create a query that incorporates the agent's role
         query = f"{self.name} analysis: {task}"
 
-        # Retrieve relevant documents
-        docs = self.retriever.retrieve(query=query, top_k=2)
+        # Retrieve relevant documents (increased to 5 for richer context)
+        docs = self.retriever.retrieve(query=query, top_k=5)
 
         if not docs or docs[0].startswith("No"):
             return "No specific company knowledge was found for this query. Use your general expertise."
@@ -109,7 +110,7 @@ Provide your analysis following the output format specified in your role descrip
 
     def execute(self, task: str, conversation_history: List[str]) -> str:
         """
-        Execute the agent's turn using the RAG chain.
+        Execute the agent's turn using the RAG chain with output validation.
 
         Args:
             task: The user's strategic plan/task
@@ -130,10 +131,18 @@ Provide your analysis following the output format specified in your role descrip
                 "history": history_str
             })
 
+            # Validate output format
+            validation = AgentOutputParser.validate_output_format(response, self.name)
+            
+            if not validation["is_valid"]:
+                print(f"WARNING: [{self.name}] Output validation failed: {validation}")
+                # Add warning to output but still return it
+                response = f"⚠️ *Output format validation warning*\n\n{response}"
+
             # Format the output for UI display
             formatted_response = f"### 🎯 {self.name}\n\n{response}"
 
-            print(f"INFO: [{self.name}] Analysis complete")
+            print(f"INFO: [{self.name}] Analysis complete (validation: {validation['is_valid']})")
             return formatted_response
 
         except Exception as e:
@@ -162,16 +171,35 @@ Provide your analysis following the output format specified in your role descrip
             # Yield the agent header first
             yield f"### 🎯 {self.name}\n\n"
 
-            # Stream the response
+            # Stream the response and accumulate for validation
+            full_response = ""
             for chunk in self.chain.stream({
                 "task": task,
                 "history": history_str
             }):
+                full_response += chunk
                 yield chunk
 
-            print(f"INFO: [{self.name}] Streaming complete")
+            # Validate after streaming completes
+            validation = AgentOutputParser.validate_output_format(full_response, self.name)
+            if not validation["is_valid"]:
+                print(f"WARNING: [{self.name}] Output validation failed: {validation}")
+
+            print(f"INFO: [{self.name}] Streaming complete (validation: {validation['is_valid']})")
 
         except Exception as e:
             error_msg = f"ERROR: [{self.name}] Failed to execute streaming: {e}"
             print(error_msg)
             yield f"❌ **Error**: Failed to generate analysis. Please check your API configuration."
+    
+    def validate_output(self, output: str) -> Dict[str, bool]:
+        """
+        Validate the output format of this agent.
+        
+        Args:
+            output: The agent's output text
+            
+        Returns:
+            Dictionary with validation results
+        """
+        return AgentOutputParser.validate_output_format(output, self.name)

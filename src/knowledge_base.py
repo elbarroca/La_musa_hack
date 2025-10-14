@@ -147,14 +147,14 @@ class ChromaKnowledgeBase(KnowledgeBase):
 
         return 0
 
-    def retrieve(self, query: str, top_k: int = 3) -> List[str]:
+    def retrieve(self, query: str, top_k: int = 5) -> List[str]:
         """
         Retrieve relevant document chunks using hybrid search (similarity + MMR).
         Implements 2025 best practices for better retrieval quality.
 
         Args:
             query: The search query
-            top_k: Number of top results to return
+            top_k: Number of top results to return (default 5 for richer context)
 
         Returns:
             List of relevant document contents with source metadata

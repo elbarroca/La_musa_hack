@@ -27,7 +27,7 @@ class LLMClient:
 
         Args:
             model: The OpenAI model to use (defaults to env var or gpt-4o-mini)
-            temperature: Sampling temperature (defaults to env var or 0.7)
+            temperature: Sampling temperature (defaults to env var or 0.5)
             max_tokens: Maximum tokens to generate (defaults to 1500)
         """
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -38,9 +38,10 @@ class LLMClient:
             )
 
         # Get configuration from environment or use defaults
+        # Per Master.md guidance: temperature 0.5 for balanced reasoning
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.temperature = temperature if temperature is not None else float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
-        self.max_tokens = max_tokens or 1500
+        self.temperature = temperature if temperature is not None else float(os.getenv("OPENAI_TEMPERATURE", "0.5"))
+        self.max_tokens = max_tokens or int(os.getenv("OPENAI_MAX_TOKENS", "4000"))
 
         # Initialize LangChain ChatOpenAI with correct parameter syntax
         # Using 2025 LangChain best practices - 'api_key' parameter is correct

@@ -162,7 +162,7 @@ Maintain structured output integrity for downstream UI parsing (e.g., Streamlit 
 
 Avoid open-ended prose; all responses must conform to the defined schema.
 
-Use temperature 0.3–0.6 for balanced reasoning depth and determinism.
+Use temperature 0.5 for balanced reasoning depth and determinism.
 
 🧬 PURPOSE OF THIS MASTER PROMPT
 This document serves as the LLM ingestion specification and orchestration seed for Symphony’s MVP.

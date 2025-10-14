@@ -70,7 +70,7 @@ Edit `.env` and add your OpenAI API key:
 ```env
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
 OPENAI_MODEL=gpt-4o-mini
-OPENAI_TEMPERATURE=0.7
+OPENAI_TEMPERATURE=0.5
 CHROMA_PERSIST_DIRECTORY=./data/chroma_db
 ```
 
@@ -176,7 +176,7 @@ The app will open in your browser at `http://localhost:8501`
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Your OpenAI API key | Required |
 | `OPENAI_MODEL` | Model to use | `gpt-4o-mini` |
-| `OPENAI_TEMPERATURE` | Sampling temperature | `0.7` |
+|  | Sampling temperature |  |
 | `CHROMA_PERSIST_DIRECTORY` | Vector DB storage path | `./data/chroma_db` |
 
 ### Agent Configuration
